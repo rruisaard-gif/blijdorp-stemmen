@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Stem op de beste presentatie</title>
+<meta name="theme-color" content="#0B8443">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌿</text></svg>">
+</head>
+<body>
+<header class="kop">
+  <svg class="blad" style="width:160px;right:-30px;top:-20px;transform:rotate(25deg)" viewBox="0 0 100 100"><path d="M50 5 C80 20 90 60 50 95 C10 60 20 20 50 5Z"/><path d="M50 10 L50 92" stroke="#0B8443" stroke-width="3"/></svg>
+  <svg class="blad" style="width:90px;right:90px;bottom:-25px;transform:rotate(-30deg)" viewBox="0 0 100 100"><path d="M50 5 C80 20 90 60 50 95 C10 60 20 20 50 5Z"/></svg>
+  <div class="wrap">
+    <span class="label" id="subtitel"></span>
+    <h1 id="titel"></h1>
+    <p>Tik op het dier van de groep met de beste presentatie.</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- Stap 1: eigen groep -->
+  <section class="paneel" id="stap-eigen">
+    <h2>Bij welke groep zit jij?</h2>
+    <p class="hint">Op je eigen groep stemmen kan niet, dus die zetten we even opzij.</p>
+    <div class="chips" id="eigen-chips"></div>
+  </section>
+
+  <!-- Stap 2: stemmen -->
+  <section class="paneel verborgen" id="stap-stem">
+    <h2>Wie gaf de beste presentatie?</h2>
+    <p class="hint" id="stem-hint">Kies één groep.</p>
+    <div class="kaarten" id="kaarten"></div>
+    <div id="fout" class="melding fout verborgen"></div>
+    <div class="balk">
+      <button class="knop" id="stemknop" disabled>Kies een dier</button>
+    </div>
+    <button class="link" id="terug">← Andere eigen groep kiezen</button>
+  </section>
+
+  <!-- Klaar -->
+  <section class="paneel klaar verborgen" id="stap-klaar">
+    <div id="klaar-dier"></div>
+    <h2>Bedankt voor je stem!</h2>
+    <p id="klaar-tekst"></p>
+    <p class="hint" style="margin-top:14px">De uitslag zie je straks op het grote scherm.</p>
+  </section>
+
+  <div id="config-fout" class="melding fout verborgen" style="margin-top:16px">
+    De stemtool is nog niet gekoppeld aan Firebase. Vul <b>config.js</b> in, of open de pagina met <b>?demo</b> om te testen.
+  </div>
+</main>
+
+<footer class="voet">Stemtool voor studentenpresentaties over de casus Diergaarde Blijdorp.<br>Geen officiële pagina van Diergaarde Blijdorp.</footer>
+
+<script src="config.js"></script>
+<script src="animals.js"></script>
+<script type="module">
+import { stem, demo, geconfigureerd } from "./db.js";
+const C = window.STEM_CONFIG, SVG = window.DIEREN_SVG;
+const $ = id => document.getElementById(id);
+$("titel").textContent = C.titel; $("subtitel").textContent = C.subtitel + (demo ? " · DEMO" : "");
+
+const opslag = {
+  get(k){ try { return localStorage.getItem(k); } catch { return null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch {} }
+};
+const SLEUTEL = "stemtool-blijdorp-" + (demo ? "demo" : (C.firebase.projectId || ""));
+function nieuweId(){
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,c=>{const r=Math.random()*16|0;return (c==="x"?r:(r&3|8)).toString(16);});
+}
+let voterId = opslag.get(SLEUTEL + "-id"); if (!voterId) { voterId = nieuweId(); opslag.set(SLEUTEL + "-id", voterId); }
+
+let eigen = 0, gekozen = null;
+const groep = id => C.groepen.find(g => g.id === id);
+
+function toon(stap){ ["stap-eigen","stap-stem","stap-klaar"].forEach(s => $(s).classList.toggle("verborgen", s !== stap)); window.scrollTo({top:0}); }
+
+function toonKlaar(id){
+  const g = groep(id);
+  $("klaar-dier").innerHTML = SVG[id] || "";
+  $("klaar-tekst").textContent = g ? `Je stemde op ${g.groep}: ${g.dier}.` : "";
+  toon("stap-klaar");
+}
+
+// Al gestemd op deze telefoon?
+const eerder = parseInt(opslag.get(SLEUTEL + "-gestemd"), 10);
+if (!demo && !geconfigureerd) { $("config-fout").classList.remove("verborgen"); }
+
+// Stap 1
+const chips = $("eigen-chips");
+C.groepen.forEach(g => {
+  const b = document.createElement("button");
+  b.className = "chip"; b.textContent = `${g.groep} · ${g.dier}`;
+  b.onclick = () => { eigen = g.id; bouwKaarten(); toon("stap-stem"); };
+  chips.appendChild(b);
+});
+const geen = document.createElement("button");
+geen.className = "chip geen"; geen.textContent = "Ik zit niet in een groep";
+geen.onclick = () => { eigen = 0; bouwKaarten(); toon("stap-stem"); };
+chips.appendChild(geen);
+
+// Stap 2
+function bouwKaarten(){
+  gekozen = null; updateKnop();
+  $("fout").classList.add("verborgen");
+  const k = $("kaarten"); k.innerHTML = "";
+  C.groepen.forEach(g => {
+    const b = document.createElement("button");
+    b.className = "kaart"; b.dataset.id = g.id;
+    b.innerHTML = (SVG[g.id] || "") +
+      `<span class="groep" style="background:${g.kleur}"></span><h3></h3><p></p>` +
+      (g.id === eigen ? `<span class="eigen">Jouw groep</span>` : "");
+    b.querySelector(".groep").textContent = g.groep;
+    b.querySelector("h3").textContent = g.dier;
+    b.querySelector("p").textContent = g.weetje;
+    if (g.id === eigen) b.disabled = true;
+    b.onclick = () => { gekozen = g.id; [...k.children].forEach(c => c.classList.toggle("gekozen", +c.dataset.id === g.id)); updateKnop(); };
+    k.appendChild(b);
+  });
+  $("terug").classList.toggle("verborgen", !C.vraagEigenGroep);
+}
+function updateKnop(){
+  const b = $("stemknop");
+  if (!gekozen) { b.disabled = true; b.textContent = "Kies een dier"; return; }
+  b.disabled = false; b.textContent = `Stem op ${groep(gekozen).dier}`;
+}
+$("terug").onclick = () => toon("stap-eigen");
+
+$("stemknop").onclick = async () => {
+  if (!gekozen) return;
+  if (!demo && !geconfigureerd) { $("config-fout").classList.remove("verborgen"); return; }
+  const b = $("stemknop"); b.disabled = true; b.textContent = "Bezig met stemmen…";
+  $("fout").classList.add("verborgen");
+  try {
+    await stem(voterId, gekozen, eigen);
+    opslag.set(SLEUTEL + "-gestemd", String(gekozen));
+    toonKlaar(gekozen);
+  } catch (e) {
+    const f = $("fout"); f.classList.remove("verborgen");
+    if (e.code === "permission-denied") f.textContent = "Je stem is niet opgeslagen. Waarschijnlijk heb je vanaf deze telefoon al gestemd.";
+    else if (e.code === "timeout") f.textContent = "Het duurt erg lang. Controleer je internetverbinding en probeer het opnieuw.";
+    else f.textContent = "Er ging iets mis bij het stemmen. Probeer het nog een keer.";
+    updateKnop();
+  }
+};
+
+// Start
+if (eerder) toonKlaar(eerder);
+else if (C.vraagEigenGroep) toon("stap-eigen");
+else { eigen = 0; bouwKaarten(); toon("stap-stem"); }
+</script>
+</body>
+</html>
