@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Tussenstand</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .lijst{margin-top:16px;display:flex;flex-direction:column;gap:10px}
+  .r{display:grid;grid-template-columns:44px 1fr 48px;gap:10px;align-items:center}
+  .r svg{width:44px;height:44px}
+  .baan{position:relative;height:36px;background:var(--mint);border-radius:9999px;overflow:hidden}
+  .vul{position:absolute;inset:0 auto 0 0;border-radius:9999px;transition:width .6s}
+  .naam{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-weight:800;font-size:14px;white-space:nowrap}
+  .n{font-weight:900;font-size:22px;text-align:right;font-variant-numeric:tabular-nums}
+  .totaal{margin-top:6px;font-weight:700;color:#3b5050}
+</style>
+</head>
+<body>
+<header class="kop"><div class="wrap"><span class="label">Alleen voor de organisatie</span><h1>Tussenstand</h1><p>Werkt live bij. Niet op de beamer zetten 😉</p></div></header>
+<main class="wrap"><section class="paneel"><h2 id="totaal">Laden…</h2><div class="lijst" id="lijst"></div><div id="fout" class="melding fout verborgen"></div></section></main>
+<script src="config.js"></script>
+<script src="animals.js"></script>
+<script type="module">
+import { volg } from "./db.js";
+const C = window.STEM_CONFIG, SVG = window.DIEREN_SVG, $ = id => document.getElementById(id);
+volg((t, n) => {
+  $("totaal").textContent = n + (n === 1 ? " stem" : " stemmen");
+  const max = Math.max(1, ...Object.values(t));
+  const rij = C.groepen.map(g => ({ ...g, n: t[g.id] || 0 })).sort((a, b) => b.n - a.n);
+  $("lijst").innerHTML = rij.map(g => `<div class="r"><div>${SVG[g.id] || ""}</div><div class="baan"><div class="vul" style="width:${g.n / max * 100}%;background:${g.kleur}55"></div><div class="naam">${g.groep} · ${g.dier}</div></div><div class="n">${g.n}</div></div>`).join("");
+}, () => { const f = $("fout"); f.textContent = "Kan de stemmen niet ophalen."; f.classList.remove("verborgen"); });
+</script>
+</body>
+</html>
